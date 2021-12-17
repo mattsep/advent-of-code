@@ -1,5 +1,5 @@
 mod aoc;
 
 fn main() {
-    aoc::day10::solve_it();
+    aoc::day12::solve_it();
 }
