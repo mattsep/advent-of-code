@@ -4,11 +4,10 @@
 
 #include <fmt/format.h>
 
-#include <aoc/7.hpp>
+#include <aoc/16.hpp>
 
 int main() {
-    // auto advent = Advent{"test.txt"};
-    auto advent = Advent{"input/7.txt"};
+    auto advent = Advent{"input/test.txt"};
 
     advent.part_one();
     advent.part_two();

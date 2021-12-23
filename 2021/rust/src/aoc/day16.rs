@@ -1,12 +1,20 @@
 #![allow(dead_code, unused_assignments)]
 
+use core::num;
 use std::fs;
 use std::io;
 use std::path::Path;
 
+#[derive(Debug)]
+struct Metadata {
+    version: u8,
+    type_id: u8,
+}
+
+#[derive(Debug)]
 enum Packet {
-    Literal(u8, u8, u64),
-    Operator(u8, u8, Vec<Packet>),
+    Literal(Metadata, u64),
+    Operator(Metadata, Vec<Packet>),
 }
 
 fn hex_to_bits(hex: u8) -> [bool; 4] {
@@ -48,38 +56,72 @@ fn parse_literal(bits: &[bool]) -> (u64, &[bool]) {
         }
     }
 
-    while (6 + skip) % 4 != 0 {
-        skip += 1
-    }
-
     (value, &bits[skip..])
 }
 
-fn parse_packet(bits: &mut [bool]) -> Packet {
+fn parse_packet(bits: &[bool]) -> (Packet, &[bool]) {
+    println!("Bit stream length: {}", bits.len());
     let version = bits_to_value(&bits[0..3]) as u8;
-    let typeid = bits_to_value(&bits[3..6]) as u8;
-
-    let mut bits = &mut bits[6..];
-    if typeid == 4 {
+    let type_id = bits_to_value(&bits[3..6]) as u8;
+    let metadata = Metadata { version, type_id };
+    let packet: Packet;
+    let mut bits = &bits[6..];
+    if type_id == 4 {
         // Literal
-        Packet::Literal(version, typeid, parse_literal(&mut bits))
+        let (value, slice) = parse_literal(bits);
+        packet = Packet::Literal(metadata, value);
+        bits = slice;
     } else {
         // Some operation + operands
         let mut packets = Vec::new();
         if bits[0] {
             // Total number of packets in next 11 bits
             let num_packets = bits_to_value(&bits[1..12]);
-            bits = &mut bits[12..];
-            for _ in 0..num_packets {}
-            packets.push(parse_packet(&mut bits));
-            Packet::Operator(version, typeid, packets)
+            println!("Expecting {} packets", num_packets);
+            bits = &bits[12..];
+            for _ in 0..num_packets {
+                let (packet, slice) = parse_packet(&bits);
+                packets.push(packet);
+                bits = slice;
+            }
         } else {
             // Total bit-length of packets in next 15 bits
-            Packet::Literal(0, 0, 0)
+            let num_bits = bits_to_value(&bits[1..16]) as usize;
+            println!("Expecting payload of {} bits", num_bits);
+            bits = &bits[16..];
+            loop {
+                let (packet, slice) = parse_packet(&bits);
+                packets.push(packet);
+                bits = slice;
+            }
+        }
+
+        packet = Packet::Operator(metadata, packets);
+    }
+
+    println!("Found packet: {:?}", packet);
+    (packet, bits)
+}
+
+fn get_version_sum(packet: &Packet) -> i32 {
+    match packet {
+        Packet::Literal(metadata, _) => metadata.version as i32,
+        Packet::Operator(metadata, packets) => {
+            let mut sum = metadata.version as i32;
+            for packet in packets {
+                sum += get_version_sum(packet);
+            }
+            sum
         }
     }
 }
 
 pub fn solve_it() {
-    let mut bits = parse("input/test.txt").unwrap();
+    let bits = parse("input/test.txt").unwrap();
+    bits.iter().map(|b| *b as i32).for_each(|c| print!("{}", c)); println!("");
+    
+    let (packet, _) = parse_packet(&bits[..]);    
+
+    println!("{:?}", packet);
+    println!("{}", get_version_sum(&packet));
 }
